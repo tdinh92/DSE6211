@@ -1,0 +1,82 @@
+---
+title: "DSE 6211 Week 1"
+author: "Thomas Dinh"
+date: "Sept 3, 2023"
+output: pdf_document
+---
+  
+
+#
+
+```{r}
+
+library(reticulate)
+# for the 'python' argument in the following function virtualenv_create(), specify the
+# path to python.exe that was installed above
+# on a Windows machine, the path to python.exe should look similar to the path below
+virtualenv_create("my_tf_workspace",
+python = 'C:\\Users\\18573\\AppData\\Local\\Programs\\Python\\Python311\\python.exe')
+  use_virtualenv("my_tf_workspace")
+
+install.packages("remotes")
+remotes::install_github("rstudio/tensorflow")
+reticulate::install_python()
+library(tensorflow)
+install_tensorflow(envname = "r-tensorflow")
+
+install.packages("keras")
+library(keras)
+install_keras()
+
+library(tensorflow)
+
+
+tf$constant("Hello Tensorflow!")
+
+```
+
+
+
+
+  
+```{r}
+
+
+```
+
+
+  
+```{r}
+
+
+
+```
+
+
+
+  
+```{r}
+
+
+
+```
+
+
+  
+
+```{r}
+
+
+
+```
+
+
+  
+```{r}
+
+
+
+```
+
+
+
