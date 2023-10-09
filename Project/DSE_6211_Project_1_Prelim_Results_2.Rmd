@@ -1,0 +1,380 @@
+---
+title: "Project 1 Prelim Results"
+author: "Thomas Dinh"
+date: "2023-10-01"
+output: pdf_document
+---
+
+```{r}
+library(dplyr)
+library(caret)
+library(reticulate)
+library(tensorflow)
+library(keras)
+library(MESS)
+
+#Loading Data set
+data <- read.csv("project_data.csv")
+
+
+#Getting the Indexes of 75% of the data
+training_ind <- createDataPartition(data$booking_status,
+                p = 0.75,
+                list = FALSE,
+                times = 1)
+
+#Training set data
+training_set <- data[training_ind, ]
+
+#Test set data
+test_set <- data[-training_ind, ]
+
+#replacing Booking status to 0 and 1
+training_set$booking_status <- ifelse(training_set$booking_status == 'canceled', 0, 1)
+test_set$booking_status <- ifelse(test_set$booking_status == 'canceled', 0, 1)
+
+#Creating the training and testing data
+training_labels <- array(training_set[,17])
+
+test_label <- array(test_set[,17])
+
+training_set <- training_set[,-17]
+
+test_set <- test_set[,-17]
+
+#checking type of meal plan
+result1 <- training_set %>%
+  group_by(training_set$type_of_meal_plan) %>%
+  summarize(count = n())
+
+# View the result
+print(result1)
+
+#replace meal plan 3 and not selected to other
+
+training_set$type_of_meal_plan <- ifelse(training_set$type_of_meal_plan %in% c('meal_plan_2','meal_plan_3', 'not_selected'), 'other_meal_choice', training_set$type_of_meal_plan)
+
+#Checking count room type reserved
+result2 <- training_set %>%
+  group_by(training_set$room_type_reserved) %>%
+  summarize(count = n())
+
+# View the result
+print(result2)
+
+#replace roomtype2,3,5,6,7 with other room
+training_set$room_type_reserved <- ifelse(training_set$room_type_reserved %in% c('room_type2', 'room_type3','room_type4','room_type5','room_type6','room_type7'), 'other_room', training_set$room_type_reserved)
+
+#checking count market segment type
+result3 <- training_set %>%
+  group_by(training_set$market_segment_type) %>%
+  summarize(count = n())
+
+# View the result
+print(result3)
+
+#replace market segment: aviation, comp to other_market
+training_set$market_segment_type <- ifelse(training_set$market_segment_type %in% c('aviation', 'complementary', 'corporate'), 'other_market', training_set$market_segment_type)
+
+#checking type of meal plan
+result1 <- test_set %>%
+  group_by(test_set$type_of_meal_plan) %>%
+  summarize(count = n())
+
+# View the result
+print(result1)
+
+#replace meal plan 3 and not selected to other
+
+test_set$type_of_meal_plan <- ifelse(test_set$type_of_meal_plan %in% c('meal_plan_2','meal_plan_3', 'not_selected'), 'other_meal_choice', test_set$type_of_meal_plan)
+
+#Checking count room type reserved
+result2 <- test_set %>%
+  group_by(test_set$room_type_reserved) %>%
+  summarize(count = n())
+
+# View the result
+print(result2)
+
+#replace roomtype2,3,5,6,7 with other room
+test_set$room_type_reserved <- ifelse(test_set$room_type_reserved %in% c('room_type2', 'room_type3','room_type4','room_type5','room_type6','room_type7'), 'other_room', test_set$room_type_reserved)
+
+#checking count market segment type
+result3 <- test_set %>%
+  group_by(test_set$market_segment_type) %>%
+  summarize(count = n())
+
+# View the result
+print(result3)
+
+#replace market segment: aviation, comp to other_market
+test_set$market_segment_type <- ifelse(test_set$market_segment_type %in% c('aviation', 'complementary', 'corporate'), 'other_market', test_set$market_segment_type)
+
+# Factored the training and test data
+training_set$type_of_meal_plan <- factor(training_set$type_of_meal_plan)
+training_set$room_type_reserved <- factor(training_set$room_type_reserved)
+training_set$market_segment_type <- factor(training_set$market_segment_type)
+
+test_set$type_of_meal_plan <- factor(test_set$type_of_meal_plan)
+test_set$room_type_reserved <- factor(test_set$room_type_reserved)
+test_set$market_segment_type <- factor(test_set$market_segment_type)
+
+#One hot encode training data with type of meal plan, room type reserved and market segment type
+onehot_encoder <- dummyVars(~ type_of_meal_plan + room_type_reserved + market_segment_type,
+                  training_set[, c("type_of_meal_plan", "room_type_reserved", "market_segment_type")],
+                  levelsOnly = FALSE,
+                  fullRank = FALSE)
+
+#Predict the one hot encode data
+onehot_enc_training <- predict(onehot_encoder,
+                      training_set[, c("type_of_meal_plan", "room_type_reserved", "market_segment_type")])
+
+#combine the training set and one hot encoded training set
+training_set <- cbind(training_set, onehot_enc_training)
+
+#One hot encode test data with type of meal plan, room type reserved and market segment type
+onehot_encoder <- dummyVars(~ type_of_meal_plan + room_type_reserved + market_segment_type,
+                            test_set[, c("type_of_meal_plan", "room_type_reserved", "market_segment_type")],
+                            levelsOnly = FALSE,
+                            fullRank = FALSE)
+
+#Predict the one hot encode test data
+onehot_enc_test <- predict(onehot_encoder,
+                          test_set[, c("type_of_meal_plan", "room_type_reserved", "market_segment_type")])
+
+#combine the training set and one hot encoded test set
+test_set <- cbind(test_set, onehot_enc_test)
+
+colnames(training_set)
+
+colnames(test_set)
+
+#taking out all non numeric columns from both the training and test data
+numeric_columns <- sapply(training_set, is.numeric)
+training_set <- training_set[, numeric_columns]
+
+
+numeric_columns <- sapply(test_set, is.numeric)
+test_set <- test_set[, numeric_columns]
+
+
+
+#scaling both the training and test data
+mean <- apply(training_set, 2, mean)
+sd <- apply(training_set, 2, sd)
+scaled_training_set_features <- scale(training_set, center = mean, scale = sd)
+scaled_test_set_features <- scale(test_set, center = mean, scale = sd)
+
+
+
+training_features <- array(data = unlist(scaled_training_set_features),
+                          dim = c(nrow(scaled_training_set_features), 18))
+
+
+test_features <- array(data = unlist(scaled_test_set_features),
+                        dim = c(nrow(scaled_test_set_features), 18))
+
+
+
+```
+
+
+  
+```{r}
+
+use_virtualenv("my_tf_workspace")
+
+model <- keras_model_sequential(list(
+              layer_dense(units = 100, activation = "relu"),
+              layer_dense(units = 50, activation = "relu"),
+              layer_dense(units = 1, activation = "sigmoid")
+))
+
+compile(model,
+        optimizer = "rmsprop",
+        loss = "binary_crossentropy",
+        metrics = "accuracy")
+
+history <- fit(model, training_features, training_labels,
+              epochs = 50, batch_size = 1000, validation_split = 0.25)
+
+results <- model %>%
+    evaluate(test_features,test_label,verbose = 0)
+
+results
+
+
+model
+predictions <- predict(model, test_features)
+test_set$p_prob <- predictions[, 1]
+head(predictions, 10)
+
+test_set$obs <- test_label
+
+roc_data <- data.frame(threshold=seq(1,0,-0.01), fpr=0, tpr=0)
+for (i in roc_data$threshold) {
+  
+  over_threshold <- test_set[test_set$p_prob  >= i, ]
+  
+  fpr <- sum(over_threshold$obs==0)/sum(test_set$obs==0)
+  roc_data[roc_data$threshold==i, "fpr"] <- fpr
+  
+  tpr <- sum(over_threshold$obs==1)/sum(test_set$obs==1)
+  roc_data[roc_data$threshold==i, "tpr"] <- tpr
+}
+
+ggplot() +
+  geom_line(data = roc_data, aes(x = fpr, y = tpr, color = threshold), size = 2) +
+  scale_color_gradientn(colors = rainbow(3)) +
+  geom_abline(intercept = 0, slope = 1, lty = 2) +
+  geom_point(data = roc_data[seq(1, 101, 10), ], aes(x = fpr, y = tpr)) +
+  geom_text(data = roc_data[seq(1, 101, 10), ],
+  aes(x = fpr, y = tpr, label = threshold, hjust = 1.2, vjust = -0.2))
+
+# Creating the not canceled column
+for (i in 1:length(test_set$p_prob)) {
+  if (test_set$p_prob[i] > 0.5) {
+    test_set$not_canceled[i] <- test_set$p_prob[i]
+  } else {
+    test_set$not_canceled[i] <- 1 - test_set$p_prob[i]
+  }
+}
+
+#calibration curve
+calibration_data <- data.frame(bin_midpoint=seq(0.05,0.95,0.1),
+observed_event_percentage=0)
+for (i in seq(0.05,0.95,0.1)) {
+  in_interval <- test_set[test_set$not_canceled >= (i-0.05) & test_set$not_canceled <= (i+0.05), ]
+  temp <- nrow(in_interval[in_interval$obs==1, ])/nrow(in_interval)
+  calibration_data[calibration_data$bin_midpoint==i, "observed_event_percentage"] <- temp
+}
+
+ggplot(data = calibration_data, aes(x = bin_midpoint, y = observed_event_percentage)) +
+  geom_line(size = 1) +
+  geom_abline(intercept = 0, slope = 1, lty = 2) +
+  geom_point(size = 2) +
+  geom_text(aes(label = bin_midpoint), hjust = 0.75, vjust = -0.5)
+
+auc <- auc(x = roc_data$fpr, y = roc_data$tpr, type = "spline")
+auc
+
+```
+
+
+  
+```{r}
+
+
+use_virtualenv("my_tf_workspace")
+
+model <- keras_model_sequential(list(
+              layer_dense(units = 100, activation = "relu"),
+              layer_dense(units = 50, activation = "relu"),
+              layer_dense(units = 25, activation = "relu"),
+              layer_dense(units = 1, activation = "sigmoid")
+))
+
+compile(model,
+        optimizer = "rmsprop",
+        loss = "binary_crossentropy",
+        metrics = "accuracy")
+
+history <- fit(model, training_features, training_labels,
+              epochs = 50, batch_size = 1000, validation_split = 0.30)
+
+results <- model %>%
+    evaluate(test_features,test_label,verbose = 0)
+
+results
+
+
+model
+predictions <- predict(model, test_features)
+test_set$p_prob <- predictions[, 1]
+head(predictions, 10)
+
+test_set$obs <- test_label
+
+roc_data <- data.frame(threshold=seq(1,0,-0.01), fpr=0, tpr=0)
+for (i in roc_data$threshold) {
+  
+  over_threshold <- test_set[test_set$p_prob  >= i, ]
+  
+  fpr <- sum(over_threshold$obs==0)/sum(test_set$obs==0)
+  roc_data[roc_data$threshold==i, "fpr"] <- fpr
+  
+  tpr <- sum(over_threshold$obs==1)/sum(test_set$obs==1)
+  roc_data[roc_data$threshold==i, "tpr"] <- tpr
+}
+
+auc <- auc(x = roc_data$fpr, y = roc_data$tpr, type = "spline")
+auc
+
+ggplot() +
+  geom_line(data = roc_data, aes(x = fpr, y = tpr, color = threshold), size = 2) +
+  scale_color_gradientn(colors = rainbow(3)) +
+  geom_abline(intercept = 0, slope = 1, lty = 2) +
+  geom_point(data = roc_data[seq(1, 101, 10), ], aes(x = fpr, y = tpr)) +
+  geom_text(data = roc_data[seq(1, 101, 10), ],
+  aes(x = fpr, y = tpr, label = threshold, hjust = 1.2, vjust = -0.2))
+
+# Creating the not canceled column
+for (i in 1:length(test_set$p_prob)) {
+  if (test_set$p_prob[i] > 0.5) {
+    test_set$not_canceled[i] <- test_set$p_prob[i]
+  } else {
+    test_set$not_canceled[i] <- 1 - test_set$p_prob[i]
+  }
+}
+
+#calibration curve
+calibration_data <- data.frame(bin_midpoint=seq(0.05,0.95,0.1),
+observed_event_percentage=0)
+for (i in seq(0.05,0.95,0.1)) {
+  in_interval <- test_set[test_set$not_canceled >= (i-0.05) & test_set$not_canceled <= (i+0.05), ]
+  temp <- nrow(in_interval[in_interval$obs==1, ])/nrow(in_interval)
+  calibration_data[calibration_data$bin_midpoint==i, "observed_event_percentage"] <- temp
+}
+
+ggplot(data = calibration_data, aes(x = bin_midpoint, y = observed_event_percentage)) +
+  geom_line(size = 1) +
+  geom_abline(intercept = 0, slope = 1, lty = 2) +
+  geom_point(size = 2) +
+  geom_text(aes(label = bin_midpoint), hjust = 0.75, vjust = -0.5)
+
+auc <- auc(x = roc_data$fpr, y = roc_data$tpr, type = "spline")
+auc
+
+```
+
+
+  
+```{r}
+
+
+```
+
+
+  
+```{r}
+
+
+
+
+```
+
+
+  
+```{r}
+
+
+```
+
+
+  
+```{r}
+
+
+
+
+```
